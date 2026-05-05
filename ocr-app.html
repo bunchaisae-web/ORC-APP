@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR — แปลงรูปภาพเป็นข้อความ</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f6f3;
+    --bg3: #efefeb;
+    --text: #1a1a18;
+    --text2: #5f5e5a;
+    --text3: #9a9890;
+    --border: rgba(0,0,0,0.12);
+    --border2: rgba(0,0,0,0.22);
+    --accent: #1a1a18;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --info-bg: #e6f1fb;
+    --info-text: #0c447c;
+    --danger-bg: #fcebeb;
+    --danger-text: #a32d2d;
+    --success-bg: #eaf3de;
+    --success-text: #3b6d11;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg2: #252523;
+      --bg3: #2e2e2b;
+      --text: #f0efe8;
+      --text2: #a8a79f;
+      --text3: #6a6a62;
+      --border: rgba(255,255,255,0.12);
+      --border2: rgba(255,255,255,0.22);
+      --accent: #f0efe8;
+      --info-bg: #042c53;
+      --info-text: #b5d4f4;
+      --danger-bg: #501313;
+      --danger-text: #f7c1c1;
+      --success-bg: #173404;
+      --success-text: #c0dd97;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg3);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .card {
+    background: var(--bg);
+    border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border);
+    padding: 2rem;
+    width: 100%;
+    max-width: 640px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  }
+  .logo { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: var(--text3); text-transform: uppercase; margin-bottom: 6px; }
+  h1 { font-size: 22px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: var(--text2); margin-bottom: 1.5rem; }
+  .section { margin-bottom: 1.25rem; }
+  label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 5px; font-weight: 500; letter-spacing: 0.02em; }
+  input[type="password"], input[type="text"], select, textarea {
+    width: 100%;
+    font-size: 14px;
+    padding: 9px 12px;
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border2);
+    background: var(--bg2);
+    color: var(--text);
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .api-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .api-hint a { color: var(--info-text); text-decoration: none; }
+  .api-hint a:hover { text-decoration: underline; }
+  .drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg2);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .drop-zone:hover, .drop-zone.dragover { background: var(--bg3); border-color: var(--accent); }
+  .drop-icon {
+    width: 40px; height: 40px; margin: 0 auto 10px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: var(--bg);
+    border: 0.5px solid var(--border2);
+  }
+  .drop-icon svg { width: 18px; height: 18px; stroke: var(--text2); fill: none; stroke-width: 1.5; }
+  .drop-label { font-size: 14px; color: var(--text2); margin-bottom: 4px; }
+  .drop-sub { font-size: 12px; color: var(--text3); }
+  .browse-btn {
+    margin-top: 10px; font-size: 13px; color: var(--info-text);
+    cursor: pointer; background: none; border: none; padding: 0;
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  #file-input { display: none; }
+  .preview-row { display: none; gap: 12px; align-items: flex-start; }
+  .preview-row.show { display: flex; }
+  .preview-img { width: 90px; height: 72px; object-fit: cover; border-radius: var(--radius); border: 0.5px solid var(--border); flex-shrink: 0; }
+  .file-info { flex: 1; }
+  .file-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 3px; word-break: break-all; }
+  .file-size { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+  .change-btn {
+    font-size: 12px; color: var(--text2); cursor: pointer;
+    background: none; border: 0.5px solid var(--border2);
+    padding: 4px 10px; border-radius: var(--radius);
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .run-btn {
+    width: 100%; padding: 11px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 14px; font-weight: 500;
+    border: none; cursor: pointer;
+    transition: opacity 0.15s;
+    margin-top: 0.25rem;
+  }
+  .run-btn:hover { opacity: 0.82; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .status { display: none; text-align: center; font-size: 13px; color: var(--text2); padding: 12px 0; }
+  .status.show { display: block; }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--border2); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box {
+    display: none; padding: 10px 14px;
+    background: var(--danger-bg); border: 0.5px solid var(--danger-text);
+    border-radius: var(--radius); font-size: 13px; color: var(--danger-text);
+    margin-top: 0.75rem;
+  }
+  .error-box.show { display: block; }
+  hr { border: none; border-top: 0.5px solid var(--border); margin: 1.25rem 0; }
+  .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .result-title { font-size: 14px; font-weight: 500; color: var(--text); }
+  .result-actions { display: flex; gap: 8px; }
+  .action-btn {
+    font-size: 12px; color: var(--text2);
+    background: var(--bg2); border: 0.5px solid var(--border2);
+    padding: 4px 10px; border-radius: var(--radius); cursor: pointer;
+  }
+  .action-btn:hover { background: var(--bg3); }
+  #result-text {
+    min-height: 160px; font-size: 13px; line-height: 1.7;
+    resize: vertical; background: var(--bg2);
+  }
+  .stats { display: flex; gap: 16px; margin-top: 8px; }
+  .stat { font-size: 12px; color: var(--text3); }
+  .stat span { font-weight: 500; color: var(--text2); }
+  .result-area { display: none; }
+  .result-area.show { display: block; }
+  .notice {
+    background: var(--info-bg); border-radius: var(--radius);
+    padding: 10px 14px; font-size: 12px; color: var(--info-text);
+    margin-bottom: 1.25rem; line-height: 1.6;
+  }
+  .notice strong { font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">Claude AI</div>
+  <h1>OCR — แปลงรูปภาพเป็นข้อความ</h1>
+  <p class="subtitle">อัปโหลดรูปภาพ แล้ว Claude AI จะแปลงข้อความให้อัตโนมัติ</p>
+
+  <div class="notice">
+    <strong>ต้องใช้ Anthropic API Key</strong> — ขอ Key ได้ฟรีที่
+    <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
+    โดย Key จะถูกใช้งานในเบราว์เซอร์ของคุณเท่านั้น ไม่มีการส่งไปที่ server อื่น
+  </div>
+
+  <div class="section">
+    <label for="api-key">Anthropic API Key</label>
+    <input type="password" id="api-key" placeholder="sk-ant-api03-..." autocomplete="off">
+    <p class="api-hint">Key จะเก็บไว้ใน session เท่านั้น ไม่ได้บันทึกถาวร</p>
+  </div>
+
+  <div class="section">
+    <label>รูปภาพ</label>
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-icon">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <p class="drop-label">ลากและวางรูปภาพที่นี่</p>
+      <p class="drop-sub">รองรับ JPG, PNG, GIF, WEBP — สูงสุด 5MB</p>
+      <button class="browse-btn" onclick="document.getElementById('file-input').click()">หรือเลือกไฟล์</button>
+      <input type="file" id="file-input" accept="image/*">
+    </div>
+    <div class="preview-row" id="preview-row">
+      <img class="preview-img" id="preview-img" src="" alt="preview">
+      <div class="file-info">
+        <div class="file-name" id="file-name"></div>
+        <div class="file-size" id="file-size"></div>
+        <button class="change-btn" onclick="resetFile()">เปลี่ยนรูป</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section grid2">
+    <div>
+      <label for="doc-type">ประเภทเอกสาร</label>
+      <select id="doc-type">
+        <option value="general">ทั่วไป</option>
+        <option value="thai">ภาษาไทย</option>
+        <option value="english">ภาษาอังกฤษ</option>
+        <option value="table">ตาราง / สเปรดชีต</option>
+        <option value="receipt">ใบเสร็จ / บิล</option>
+        <option value="id-card">บัตรประชาชน / นามบัตร</option>
+        <option value="handwriting">ลายมือ</option>
+      </select>
+    </div>
+    <div>
+      <label for="output-format">รูปแบบผลลัพธ์</label>
+      <select id="output-format">
+        <option value="plain">ข้อความธรรมดา</option>
+        <option value="structured">จัดโครงสร้าง</option>
+        <option value="markdown">Markdown</option>
+        <option value="json">JSON</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="run-btn" id="run-btn" onclick="runOCR()" disabled>แปลงข้อความ</button>
+
+  <div class="status" id="status">
+    <span class="spinner"></span>กำลังวิเคราะห์รูปภาพ...
+  </div>
+  <div class="error-box" id="error-box"></div>
+
+  <div class="result-area" id="result-area">
+    <hr>
+    <div class="result-header">
+      <span class="result-title">ข้อความที่แปลงได้</span>
+      <div class="result-actions">
+        <button class="action-btn" onclick="copyText()">คัดลอก</button>
+        <button class="action-btn" onclick="downloadText()">ดาวน์โหลด .txt</button>
+      </div>
+    </div>
+    <textarea id="result-text"></textarea>
+    <div class="stats">
+      <div class="stat">ตัวอักษร: <span id="char-count">0</span></div>
+      <div class="stat">คำ: <span id="word-count">0</span></div>
+      <div class="stat">บรรทัด: <span id="line-count">0</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentFile = null, currentBase64 = null;
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const apiKeyInput = document.getElementById('api-key');
+const runBtn = document.getElementById('run-btn');
+
+function updateRunBtn() {
+  runBtn.disabled = !(currentBase64 && apiKeyInput.value.trim());
+}
+
+apiKeyInput.addEventListener('input', updateRunBtn);
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) handleFile(f);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if (file.size > 5 * 1024 * 1024) { showError('ขนาดไฟล์เกิน 5MB'); return; }
+  currentFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentBase64 = e.target.result.split(',')[1];
+    document.getElementById('preview-img').src = e.target.result;
+    document.getElementById('file-name').textContent = file.name;
+    document.getElementById('file-size').textContent = (file.size / 1024).toFixed(1) + ' KB';
+    document.getElementById('preview-row').classList.add('show');
+    dropZone.style.display = 'none';
+    hideError(); hideResult(); updateRunBtn();
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetFile() {
+  currentFile = null; currentBase64 = null;
+  document.getElementById('preview-row').classList.remove('show');
+  dropZone.style.display = '';
+  fileInput.value = '';
+  hideResult(); hideError(); updateRunBtn();
+}
+
+async function runOCR() {
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey || !currentBase64) return;
+
+  const prompts = {
+    general: 'Extract all text from this image accurately.',
+    thai: 'แปลงข้อความในรูปภาพนี้เป็นข้อความดิจิทัล รักษาภาษาไทยให้ถูกต้อง',
+    english: 'Extract all English text from this image accurately.',
+    table: 'Extract the table data from this image. Preserve structure and alignment.',
+    receipt: 'Extract all text from this receipt/invoice including items, prices, totals, and dates.',
+    'id-card': 'Extract all text from this ID card or business card.',
+    handwriting: 'Transcribe the handwritten text in this image as accurately as possible.'
+  };
+  const formats = {
+    plain: 'Output as plain text only, no formatting.',
+    structured: 'Output as structured text with clear sections and labels.',
+    markdown: 'Output as Markdown with appropriate headers, lists, and formatting.',
+    json: 'Output as valid JSON with appropriate keys for the content type.'
+  };
+
+  const docType = document.getElementById('doc-type').value;
+  const outputFormat = document.getElementById('output-format').value;
+  const system = `You are an expert OCR system. ${prompts[docType]} ${formats[outputFormat]} Extract ONLY the text content — no explanations or preamble.`;
+
+  runBtn.disabled = true;
+  document.getElementById('status').classList.add('show');
+  hideError(); hideResult();
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: currentFile.type || 'image/jpeg', data: currentBase64 } },
+            { type: 'text', text: 'Please extract all text from this image.' }
+          ]
+        }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content.map(b => b.text || '').join('').trim();
+    showResult(text);
+  } catch (err) {
+    showError('เกิดข้อผิดพลาด: ' + err.message);
+  } finally {
+    document.getElementById('status').classList.remove('show');
+    updateRunBtn();
+  }
+}
+
+function showResult(text) {
+  const ta = document.getElementById('result-text');
+  ta.value = text;
+  document.getElementById('char-count').textContent = text.length.toLocaleString();
+  document.getElementById('word-count').textContent = text.trim() ? text.trim().split(/\s+/).length.toLocaleString() : '0';
+  document.getElementById('line-count').textContent = text.split('\n').length.toLocaleString();
+  document.getElementById('result-area').classList.add('show');
+}
+function hideResult() { document.getElementById('result-area').classList.remove('show'); }
+function showError(msg) { const el = document.getElementById('error-box'); el.textContent = msg; el.classList.add('show'); }
+function hideError() { document.getElementById('error-box').classList.remove('show'); }
+function copyText() {
+  const t = document.getElementById('result-text').value;
+  navigator.clipboard.writeText(t).catch(() => { document.getElementById('result-text').select(); document.execCommand('copy'); });
+}
+function downloadText() {
+  const t = document.getElementById('result-text').value;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([t], { type: 'text/plain;charset=utf-8' }));
+  a.download = 'ocr-result.txt';
+  a.click();
+}
+</script>
+</body>
+</html>
